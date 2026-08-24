@@ -1,0 +1,8 @@
+[*][b]#CLASS_SHORTNAME[/b]
+[i]#CLASS_COMMENT[/i]
+[list]
+#EVENTS
+#FIELDS
+#METHODS
+#PROPERTIES
+[/list]

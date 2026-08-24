@@ -1,0 +1,7 @@
+[b]#LIB_NAME[/b]
+[i]#LIB_COMMENT[/i]
+[b]Author: [/b]#AUTHOR
+[b]Version: [/b]#VERSION
+[list]
+#CLASSES
+[/list]

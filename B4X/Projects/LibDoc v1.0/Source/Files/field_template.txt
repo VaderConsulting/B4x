@@ -1,0 +1,2 @@
+[*][b]#NAME[/b] #PARAM
+[i]#COMMENT[/i]

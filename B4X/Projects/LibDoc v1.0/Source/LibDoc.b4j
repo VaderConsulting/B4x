@@ -1,0 +1,601 @@
+﻿Version=5.88
+AppType=JavaFX
+NumberOfModules=0
+Build1=Default,b4j.example
+NumberOfFiles=20
+File1=body_template.htm
+File2=body_template.txt
+File3=button.css
+File4=class_template.htm
+File5=class_template.txt
+File6=event_template.htm
+File7=event_template.txt
+File8=field_template.htm
+File9=field_template.txt
+File10=index_template.htm
+File11=index_template.txt
+File12=main.bjl
+File13=member_template.htm
+File14=member_template.txt
+File15=method_template.htm
+File16=method_template.txt
+File17=parameter_template.htm
+File18=parameter_template.txt
+File19=property_template.htm
+File20=property_template.txt
+NumberOfLibraries=3
+Library1=jcore
+Library2=jfx
+Library3=jxmlsax
+@EndOfDesignText@
+#Region Project Attributes 
+	#MainFormWidth: 800
+	#MainFormHeight: 600 
+#End Region
+
+Sub Process_Globals
+	Private fx As JFX
+	Private MainForm As Form
+	Private WebView As WebView
+	Private btnOpen As Button
+	Private cbFormat As ChoiceBox
+	Private btnSave As Button
+	Private btnToClipboard As Button
+
+	Private DossierInitialOpen As String
+	Private DossierInitialSave As String
+	Private XML As SaxParser
+	Private Contenu As List
+	Private NomsClasses As Map
+	Private RésultatConversion As String
+
+	Type typLib(Name As String, Description As String, Version As String, Auteur As String)
+	Type typClass(Name As String, Shortname As String, Owner As String, Comment As String, Events As List, Methods As List, Properties As List, Fields As List)
+	Type typField(Name As String, DesignerName As String, Comment As String, ReturnType As String)
+	Type typMethod(Name As String, DesignerName As String, Comment As String, ReturnType As String, Parameters As List)
+	Type typParameter(Name As String, ParamType As String)
+	Type typProperty(Name As String, DesignerName As String, Comment As String, ReturnType As String, Parameter As typParameter)
+	Private Library As typLib
+	Private CurrentClass As typClass
+	Private CurrentField As typField
+	Private CurrentMethod As typMethod
+	Private CurrentParameter As typParameter
+	Private CurrentProperty As typProperty
+
+	Private BodyTmpl As String
+	Private IndexTmpl As String
+	Private ClassTmpl As String
+	Private MemberTmpl As String
+	Private EventTmpl As String
+	Private FieldTmpl As String
+	Private MethodTmpl As String
+	Private PropertyTmpl As String
+	Private ParameterTmpl As String
+	Private BreakLine As String
+
+	Private Const COMMENTAIRE_À_ÉLIMINER_1 As String = "Class module" & CRLF
+	Private Const COMMENTAIRE_À_ÉLIMINER_2 As String = "Static code module" & CRLF
+End Sub
+
+Sub AppStart (Form1 As Form, Args() As String)
+	MainForm = Form1
+	MainForm.RootPane.LoadLayout("main")
+	MainForm.Stylesheets.Add(File.GetUri(File.DirAssets, "button.css"))
+
+	'Lecture des paramètres
+	If File.Exists(File.DirApp, "config.ini") Then
+		Dim L As List = File.ReadList(File.DirApp, "config.ini")
+		DossierInitialOpen = L.Get(0)
+		DossierInitialSave = L.Get(1)
+	End If
+
+	'Remplissage de la ChoiceBox
+	cbFormat.Items.AddAll(Array("HTML Page", "BB Code"))
+	cbFormat.SelectedIndex = 0
+
+	'Affichage de la fenêtre
+	MainForm.Show
+
+	'Sélection du fichier XML
+	SelectionnerXML
+End Sub
+
+Sub SelectionnerXML
+	'Sélection du fichier XML
+	Dim FC As FileChooser
+	FC.Initialize
+	If DossierInitialOpen = "" Or Not(File.Exists(File.GetFileParent(DossierInitialOpen), "")) Then
+		DossierInitialOpen = File.DirApp
+	End If
+	FC.InitialDirectory = DossierInitialOpen
+	FC.Title = "Select the XML file"
+	FC.SetExtensionFilter("XML", Array As String("*.xml"))
+	Dim Choix As String = FC.ShowOpen(MainForm)
+	If Choix <> "" Then
+		'Sauvegarde des paramètres
+		DossierInitialOpen = File.GetFileParent(Choix)
+		File.WriteList(File.DirApp, "config.ini", Array As String(DossierInitialOpen, DossierInitialSave))
+
+		'Initialisations
+		XML.Initialize
+		Contenu.Initialize
+		Library.Initialize
+		NomsClasses.Initialize
+		cbFormat.Enabled = False
+		btnSave.Enabled = False
+		btnToClipboard.Enabled = False
+		WebView.LoadHtml("")
+
+		'Le nom de la bibliothèque provient du nom du fichier
+		Library.Name = File.GetName(Choix)
+		Dim Point As Int = Library.Name.LastIndexOf(".")
+		If Point > -1 Then
+			Library.Name = Library.Name.SubString2(0, Point)
+		End If
+
+		'Lecture du XML et conversion
+		Dim InputXML As InputStream = File.OpenInput("", Choix)
+		XML.Parse(InputXML, "XML")
+		InputXML.Close
+	End If
+End Sub
+
+Sub LastParent As String
+	Return XML.Parents.Get(XML.Parents.Size - 1)
+End Sub
+
+Sub XML_StartElement (Uri As String, Name As String, Attributes As Attributes)
+	'Log("Start " & Uri & " Name=" & Name & " " & Attributes.Size)
+	If Name = "class" Then
+		Dim NewClass As typClass
+		NewClass.Initialize
+		NewClass.Events.Initialize
+		NewClass.Fields.Initialize
+		NewClass.Methods.Initialize
+		NewClass.Properties.Initialize
+		CurrentClass = NewClass
+	Else If Name = "field" Then
+		Dim NewField As typField
+		NewField.Initialize
+		CurrentClass.Fields.Add(NewField)
+		CurrentField = NewField
+	Else If Name = "method" Then
+		Dim NewMethod As typMethod
+		NewMethod.Initialize
+		NewMethod.Parameters.Initialize
+		CurrentClass.Methods.Add(NewMethod)
+		CurrentMethod = NewMethod
+	Else If Name = "parameter" Then
+		Dim NewParameter As typParameter
+		NewParameter.Initialize
+		If LastParent = "method" Then
+			CurrentMethod.Parameters.Add(NewParameter)
+		Else If LastParent = "property" Then
+			CurrentProperty.Parameter = NewParameter
+		End If
+		CurrentParameter = NewParameter
+	Else If Name = "property" Then
+		Dim NewProperty As typProperty
+		NewProperty.Initialize
+		CurrentClass.Properties.Add(NewProperty)
+		CurrentProperty = NewProperty
+	Else If Name = "name" Then
+		If Attributes.Size > 0 And Attributes.GetName(0) = "DesignerName" Then
+			If LastParent = "field" Then
+				CurrentField.DesignerName = Attributes.GetValue(0)
+			Else If LastParent = "method" Then
+				CurrentMethod.DesignerName = Attributes.GetValue(0)
+			Else If LastParent = "property" Then
+				CurrentProperty.DesignerName = Attributes.GetValue(0)
+			End If
+		End If
+	End If
+End Sub
+
+Sub XML_EndElement (Uri As String, Name As String, Text As StringBuilder)
+	'Log("End " & Uri & " Name=" & Name & " " & Text.ToString)
+	If Name = "name" Then
+		If LastParent = "class" Then
+			CurrentClass.Name = Text.ToString
+			Contenu.Add(CurrentClass)
+		Else If LastParent = "field" Then
+			CurrentField.Name = Text.ToString
+		Else If LastParent = "method" Then
+			CurrentMethod.Name = Text.ToString
+		Else If LastParent = "parameter" Then
+			CurrentParameter.Name = Text.ToString
+		Else If LastParent = "property" Then
+			CurrentProperty.Name = Text.ToString
+		End If
+	Else If Name = "shortname" And LastParent = "class" Then
+		CurrentClass.Shortname = Text.ToString
+		NomsClasses.Put(CurrentClass.Name, CurrentClass.Shortname)
+	Else If Name = "owner" And LastParent = "class" Then
+		CurrentClass.Owner = Text.ToString
+	Else If Name = "comment" Then
+		If LastParent = "class" Then
+			If Text.ToString <> COMMENTAIRE_À_ÉLIMINER_1 And Text.ToString <> COMMENTAIRE_À_ÉLIMINER_2 Then
+				CurrentClass.Comment = Text.ToString
+			End If
+		Else If LastParent = "field" Then
+			CurrentField.Comment = Text.ToString
+		Else If LastParent = "method" Then
+			CurrentMethod.Comment = Text.ToString
+		Else If LastParent = "property" Then
+			CurrentProperty.Comment = Text.ToString
+		Else If LastParent = "root" Then
+			Library.Description = Text.ToString
+		End If
+	Else If Name = "event" And LastParent = "class" Then
+		CurrentClass.Events.Add(Text.ToString)
+	Else If Name = "type" And LastParent = "parameter" Then
+		CurrentParameter.ParamType = Text.ToString
+	Else If Name = "returntype" Then
+		If LastParent = "field" Then
+			CurrentField.ReturnType = Text.ToString
+		Else If LastParent = "method" Then
+			CurrentMethod.ReturnType = Text.ToString
+		Else If LastParent = "property" Then
+			CurrentProperty.ReturnType = Text.ToString
+		End If
+	Else If Name = "version" Then
+		Library.Version = Text.ToString
+	Else If Name = "author" Then
+		Library.Auteur = Text.ToString
+	Else If Name = "root" Then
+		'Fin du XML -> tri du contenu par nom de classe
+		Contenu.SortType("Shortname", True)
+
+		If cbFormat.SelectedIndex = 0 Then
+			'Conversion en HTML
+			ConvertirEnHTML
+		Else
+			'Conversion en Code BB
+			ConvertirEnCodeBB
+		End If
+	End If
+End Sub
+
+Sub DecouperEtFormaterParametres(Paramètres As String) As String
+	'Découpage et formatage des paramètres de l'évènement
+	Dim Résultat As StringBuilder
+	Résultat.Initialize
+	Dim Matcher As Matcher = Regex.Matcher2("[\w][\w(,)]*[ ][Aa][Ss][ ][\w]*", 0, Paramètres)
+	Dim DernièrePosition As Int
+	Do While Matcher.Find
+		'Formatage de chaque paramètre
+		Dim PositionAs As Int = Matcher.Match.ToLowerCase.IndexOf(" as ")
+		Dim Param As String = FormaterParametre(Matcher.Match.SubString2(0, PositionAs), Matcher.Match.SubString(PositionAs + 4))
+		If Résultat.Length > 0 Then
+			Résultat.Append(", ")
+		End If
+		Résultat.Append(Param)
+		DernièrePosition = Matcher.GetEnd(0)
+	Loop
+	If Résultat.Length > 0 Then
+		'Ajout des parenthèses
+		Résultat.Insert(0, "(").Append(")")
+	End If
+	If DernièrePosition < Paramètres.Length Then
+		'Ajout du type de retour et du commentaire
+		Paramètres = Paramètres.SubString(DernièrePosition)
+		Dim Comment As String
+		Dim PosComment As Int = Paramètres.IndexOf("'")
+		If PosComment > -1 Then
+			Comment = Paramètres.SubString(PosComment)
+			Paramètres = Paramètres.SubString2(0, PosComment)
+		End If
+		Dim Matcher As Matcher = Regex.Matcher2("[ ][Aa][Ss][ ][\w][\w(,)]*", 0, Paramètres)
+		Do While Matcher.Find
+			Dim PositionAs As Int = Matcher.Match.ToLowerCase.IndexOf(" as ")
+			Dim ReturnType As String = FormaterParametre(Matcher.Match.SubString2(0, PositionAs), Matcher.Match.SubString(PositionAs + 4))
+			Résultat.Append(" ").Append(ReturnType)
+		Loop
+		If Comment.Length > 0 Then
+			Résultat.Append(" ").Append(Comment)
+		End If
+	End If
+	Return Résultat.ToString
+End Sub
+
+Sub GetShortName(ClassName As String) As String
+	Dim Classe As String = NomsClasses.Get(ClassName)
+	If Classe = "null" Then Return ClassName
+	Return Classe
+End Sub
+
+Sub FormaterParametre(NomParam As String, TypeParam As String) As String
+	If TypeParam = "void" Then
+		Return ""
+	End If
+	Dim Tableau As String
+	Dim PosCrochet As Int = TypeParam.IndexOf("[")
+	If PosCrochet > -1 Then
+		'Le type est un tableau de type
+		Tableau = TypeParam.SubString(PosCrochet)
+		Tableau = Tableau.Replace("[][]", "(,)").Replace("[]", "()")
+		TypeParam = TypeParam.SubString2(0, PosCrochet)
+	End If
+	TypeParam = TypeParam.Trim
+	If TypeParam = "java.lang.Integer" Then
+		TypeParam = "Int"
+	Else
+		Dim PosDernierPoint As Int = TypeParam.LastIndexOf(".")
+		If PosDernierPoint = -1 Then
+			'Capitalisation du type
+			TypeParam = TypeParam.SubString2(0, 1).ToUpperCase & TypeParam.SubString(1)
+		Else If TypeParam.StartsWith("anywheresoftware.") Then
+			'Remplacement par le dernier élément du nom long
+			TypeParam = TypeParam.SubString(PosDernierPoint + 1)
+			If TypeParam = "ConcreteNodeWrapper" Then
+				TypeParam = "Node"
+			Else If TypeParam = "ConcretePaneWrapper" Then
+				TypeParam = "Pane"
+			Else If TypeParam = "ConcreteViewWrapper" Then
+				TypeParam = "View"
+			Else
+				TypeParam = TypeParam.Replace("Wrapper", "")
+			End If
+		Else If TypeParam.StartsWith("java.lang.") Then
+			'Remplacement par le dernier élément du nom long
+			TypeParam = TypeParam.SubString(PosDernierPoint + 1)
+		Else
+			'Remplacement par le nom court
+			TypeParam = GetShortName(TypeParam)
+		End If
+	End If
+	TypeParam = TypeParam & Tableau
+	Return ParameterTmpl.Replace("#PARAM_NAME", NomParam).Replace("#PARAM_TYPE", TypeParam).Trim
+End Sub
+
+Sub Convertir
+	'Formatage du contenu avec les templates
+	BodyTmpl = BodyTmpl.Replace("#LIB_NAME", Library.Name)
+	BodyTmpl = BodyTmpl.Replace("#LIB_COMMENT", Library.Description)
+	BodyTmpl = BodyTmpl.Replace("#AUTHOR", Library.Auteur)
+	BodyTmpl = BodyTmpl.Replace("#VERSION", Library.Version)
+	Dim CodeIndex As StringBuilder
+	CodeIndex.Initialize
+	Dim CodeClasses As StringBuilder
+	CodeClasses.Initialize
+	For i = 0 To Contenu.Size - 1
+		'Classe
+		Dim Classe As typClass = Contenu.Get(i)
+		Dim CodeClass As String = ClassTmpl.Replace("#CLASS_NAME", Classe.Name).Replace("#CLASS_SHORTNAME", Classe.Shortname)
+		CodeClass = CodeClass.Replace("#LINK", i).Replace("#CLASS_OWNER", Classe.Owner).Replace("#CLASS_COMMENT", Classe.Comment)
+		CodeIndex.Append(IndexTmpl.Replace("#LINK", i).Replace("#NAME", Classe.Shortname))
+
+		'Evènements
+		If Classe.Events.Size > 0 Then
+			Dim CodeEvents As StringBuilder
+			CodeEvents.Initialize
+			Classe.Events.SortCaseInsensitive(True)
+			For e = 0 To Classe.Events.Size - 1
+				Dim Event As String = Classe.Events.Get(e)
+				Dim PosParenthèse As Int = Event.IndexOf("(")
+				Dim PosEspace As Int = Event.IndexOf(" ")
+				Dim NomEvent As String
+				Dim ParamEvent As String
+				If PosParenthèse > -1 And PosParenthèse < PosEspace Then
+					NomEvent = Event.SubString2(0, PosParenthèse)
+					ParamEvent = DecouperEtFormaterParametres(Event.SubString(PosParenthèse))
+				Else If PosEspace > -1 Then
+					NomEvent = Event.SubString2(0, PosEspace)
+					ParamEvent = DecouperEtFormaterParametres(Event.SubString(PosEspace))
+				Else
+					NomEvent = Event
+				End If
+				Event = EventTmpl.Replace("#NAME", NomEvent).Replace("#PARAM", ParamEvent)
+				CodeEvents.Append(Event)
+			Next
+			CodeClass = CodeClass.Replace("#EVENTS", MemberTmpl.Replace("#NAME", "Events").Replace("#DATA", CodeEvents.ToString))
+		Else
+			CodeClass = CodeClass.Replace("#EVENTS", "")
+		End If
+
+		'Champs
+		If Classe.Fields.Size > 0 Then
+			Dim CodeFields As StringBuilder
+			CodeFields.Initialize
+			Classe.Fields.SortTypeCaseInsensitive("Name", True)
+			For f = 0 To Classe.Fields.Size - 1
+				Dim Field As typField = Classe.Fields.Get(f)
+				If Field.DesignerName <> "" Then
+					Field.Name = Field.DesignerName
+				End If
+				Dim Param As String
+				If Field.ReturnType <> "" Then
+					Param = FormaterParametre("", Field.ReturnType)
+				End If
+				Dim Comment As String = Field.Comment.Replace(CRLF, BreakLine)
+				CodeFields.Append(FieldTmpl.Replace("#NAME", Field.Name).Replace("#PARAM", Param).Replace("#COMMENT", Comment))
+			Next
+			CodeClass = CodeClass.Replace("#FIELDS", MemberTmpl.Replace("#NAME", "Fields").Replace("#DATA", CodeFields.ToString))
+		Else
+			CodeClass = CodeClass.Replace("#FIELDS", "")
+		End If
+
+		'Méthodes
+		If Classe.Methods.Size > 0 Then
+			Dim CodeMethods As StringBuilder
+			CodeMethods.Initialize
+			Classe.Methods.SortTypeCaseInsensitive("Name", True)
+			For m = 0 To Classe.Methods.Size - 1
+				Dim Méthode As typMethod = Classe.Methods.Get(m)
+				If Méthode.DesignerName <> "" Then
+					Méthode.Name = Méthode.DesignerName
+				End If
+				Dim Paramètres As StringBuilder
+				Paramètres.Initialize
+				If Méthode.Parameters.Size > 0 Then
+					Dim PremierParam As typParameter = Méthode.Parameters.Get(0)
+					If PremierParam.ParamType = "anywheresoftware.b4a.BA" Then
+						'Ce paramètre est à usage interne et ne doit pas apparaître
+						Méthode.Parameters.RemoveAt(0)
+					End If
+					If Méthode.Parameters.Size > 0 Then
+						Paramètres.Append("(")
+						For t = 0 To Méthode.Parameters.Size - 1
+							Dim Paramètre As typParameter = Méthode.Parameters.Get(t)
+							Dim Param As String = FormaterParametre(Paramètre.Name, Paramètre.ParamType)
+							If Paramètres.Length > 1 Then
+								Paramètres.Append(", ")
+							End If
+							Paramètres.Append(Param)
+						Next
+						Paramètres.Append(")")
+					End If
+				End If
+				If Méthode.ReturnType <> "" Then
+					Paramètres.Append(" ").Append(FormaterParametre("", Méthode.ReturnType))
+				End If
+				Dim Comment As String = Méthode.Comment.Replace(CRLF, BreakLine)
+				CodeMethods.Append(MethodTmpl.Replace("#NAME", Méthode.Name).Replace("#PARAM", Paramètres.ToString).Replace("#COMMENT", Comment))
+			Next
+			CodeClass = CodeClass.Replace("#METHODS", MemberTmpl.Replace("#NAME", "Functions").Replace("#DATA", CodeMethods.ToString))
+		Else
+			CodeClass = CodeClass.Replace("#METHODS", "")
+		End If
+
+		'Propriétés
+		If Classe.Properties.Size > 0 Then
+			Dim CodeProperties As StringBuilder
+			CodeProperties.Initialize
+			Classe.Properties.SortTypeCaseInsensitive("Name", True)
+			For p = 0 To Classe.Properties.Size - 1
+				Dim Propriété As typProperty = Classe.Properties.Get(p)
+				If Propriété.DesignerName <> "" Then
+					Propriété.Name = Propriété.DesignerName
+				End If
+				Dim Param As String
+				If Propriété.ReturnType = "" Then
+					If Propriété.Parameter.IsInitialized Then
+						Param = FormaterParametre("", Propriété.Parameter.ParamType) & " [write only]"
+					End If
+				Else
+					Param = FormaterParametre("", Propriété.ReturnType)
+					If Not(Propriété.Parameter.IsInitialized) Then
+						Param = Param & " [read only]"
+					End If
+				End If
+				Dim Comment As String = Propriété.Comment.Replace(CRLF, BreakLine)
+				CodeProperties.Append(PropertyTmpl.Replace("#NAME", Propriété.Name).Replace("#PARAM", Param).Replace("#COMMENT", Comment))
+			Next
+			CodeClass = CodeClass.Replace("#PROPERTIES", MemberTmpl.Replace("#NAME", "Properties").Replace("#DATA", CodeProperties.ToString))
+		Else
+			CodeClass = CodeClass.Replace("#PROPERTIES", "")
+		End If
+		CodeClasses.Append(CodeClass)
+	Next
+	RésultatConversion = BodyTmpl.Replace("#INDEX", CodeIndex).Replace("#CLASSES", CodeClasses)
+
+	'Suppression des lignes vides
+	RésultatConversion = RésultatConversion.Replace(Chr(13) & Chr(10), CRLF)
+	RésultatConversion = RésultatConversion.Replace(CRLF & CRLF, CRLF).Replace(CRLF & CRLF, CRLF)
+
+	'Modification de l'interface
+	cbFormat.Enabled = True
+	If RésultatConversion <> "" Then
+		btnSave.Enabled = True
+		btnToClipboard.Enabled = True
+	End If
+End Sub
+
+Sub ConvertirEnHTML
+	'Lecture des templates
+	BodyTmpl = File.ReadString(File.DirAssets, "body_template.htm")
+	IndexTmpl = File.ReadString(File.DirAssets, "index_template.htm")
+	ClassTmpl = File.ReadString(File.DirAssets, "class_template.htm")
+	MemberTmpl = File.ReadString(File.DirAssets, "member_template.htm")
+	EventTmpl = File.ReadString(File.DirAssets, "event_template.htm")
+	FieldTmpl = File.ReadString(File.DirAssets, "field_template.htm")
+	MethodTmpl = File.ReadString(File.DirAssets, "method_template.htm")
+	PropertyTmpl = File.ReadString(File.DirAssets, "property_template.htm")
+	ParameterTmpl = File.ReadString(File.DirAssets, "parameter_template.htm")
+	BreakLine = "<BR/>" & CRLF
+
+	'Formatage du contenu en HTML
+	Convertir
+
+	'Affichage du résultat dans le WebView
+	WebView.LoadHtml(RésultatConversion)
+End Sub
+
+Sub ConvertirEnCodeBB
+	'Lecture des templates
+	BodyTmpl = File.ReadString(File.DirAssets, "body_template.txt")
+	IndexTmpl = File.ReadString(File.DirAssets, "index_template.txt")
+	ClassTmpl = File.ReadString(File.DirAssets, "class_template.txt")
+	MemberTmpl = File.ReadString(File.DirAssets, "member_template.txt")
+	EventTmpl = File.ReadString(File.DirAssets, "event_template.txt")
+	FieldTmpl = File.ReadString(File.DirAssets, "field_template.txt")
+	MethodTmpl = File.ReadString(File.DirAssets, "method_template.txt")
+	PropertyTmpl = File.ReadString(File.DirAssets, "property_template.txt")
+	ParameterTmpl = File.ReadString(File.DirAssets, "parameter_template.txt")
+	BreakLine = CRLF
+
+	'Formatage du contenu en code BB
+	Convertir
+
+	'Affichage du résultat dans le WebView
+	WebView.LoadHtml(RésultatConversion.Replace(CRLF, "<BR/>"))
+End Sub
+
+Sub btnOpen_Action
+	SelectionnerXML
+End Sub
+
+Sub cbFormat_SelectedIndexChanged(Index As Int, Value As Object)
+	If Contenu.IsInitialized Then
+		cbFormat.Enabled = False
+		btnSave.Enabled = False
+		btnToClipboard.Enabled = False
+		WebView.LoadHtml("")
+		If cbFormat.SelectedIndex = 0 Then
+			'Conversion en HTML
+			ConvertirEnHTML
+		Else
+			'Conversion en code BB
+			ConvertirEnCodeBB
+		End If
+	End If
+End Sub
+
+Sub btnSave_Action
+	'Le nom du fichier est construit d'après le nom de la bibliothèque
+	Dim FC As FileChooser
+	FC.Initialize
+	Dim NomFichier As String = Library.Name
+	If cbFormat.SelectedIndex = 0 Then
+		NomFichier = NomFichier & ".htm"
+		FC.SetExtensionFilter("HTML", Array As String("*.htm", "*.html"))
+	Else
+		NomFichier = NomFichier & ".txt"
+		FC.SetExtensionFilter("Text", Array As String("*.txt"))
+	End If
+
+	'Sélection du répertoire de sauvegarde
+	If DossierInitialSave = "" Or Not(File.Exists(File.GetFileParent(DossierInitialSave), "")) Then
+		DossierInitialSave = File.DirApp
+	End If
+	FC.InitialDirectory = DossierInitialSave
+	FC.InitialFileName = NomFichier
+	FC.Title = "Save as..."
+	Dim Choix As String = FC.ShowSave(MainForm)
+	If Choix <> "" Then
+		'Sauvegarde des paramètres
+		DossierInitialSave = File.GetFileParent(Choix)
+		File.WriteList(File.DirApp, "config.ini", Array As String(DossierInitialOpen, DossierInitialSave))
+
+		'Écriture du fichier
+		File.WriteString("", Choix, RésultatConversion)
+	End If
+End Sub
+
+Sub btnToClipboard_Action
+	fx.Clipboard.SetString(RésultatConversion)
+End Sub
+
+Sub btnQuit_Action
+	MainForm.Close
+End Sub

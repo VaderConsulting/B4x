@@ -1,0 +1,1 @@
+@"C:\Program Files\Java\11.0.1\bin\java.exe" -jar "C:\Users\windo\OneDrive\Documents\B4x\temp\b4xlib2XML.jar" --module-path "C:\Program Files\Java\11.0.1\javafx\lib" --add-modules javafx.controls,javafx.fxml
