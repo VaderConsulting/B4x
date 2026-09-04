@@ -23,6 +23,10 @@ Anywhere Software B4X additional libraries and a few tool projects (B4A, B4i, B4
 
 Open `B4X/Projects/b4xlib2XML/b4xlib2XML.b4j` (or the copy under `B4j/Projects`) in the B4J IDE. Copy `*/Libraries` into the corresponding B4X additional-libraries folder.
 
+## Requirements
+
+- B4X (B4A / B4J / B4i)
+
 ## Attribution and provenance
 
 Working copy of B4X additional libraries from Dave Robinson's Historical Dev archive. Original B4X platform and many libraries are by Anywhere Software (Erel Uziel) and community authors. See `THIRD_PARTY_NOTICES.md`.
