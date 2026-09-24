@@ -1,6 +1,6 @@
 # B4x
 
-Anywhere Software B4X additional libraries and a few tool projects (B4A, B4i, B4J, B4R, plus shared B4X libs) kept as Dave Robinson's working copy. The tree is organised as `B4X` / `B4a` / `B4i` / `B4j` / `B4r` each with `Libraries` and `Projects`. Includes `.b4xlib` packages such as B4XPages, XUI Views, OkHttpUtils2, and the `b4xlib2XML` B4J converter. Authorship of the libraries stays with Anywhere Software / the original library authors.
+Anywhere Software B4X additional libraries and a few tool projects (B4A, B4i, B4J, B4R, plus shared B4X libs) kept as my working copy. The tree is organised as `B4X` / `B4a` / `B4i` / `B4j` / `B4r` each with `Libraries` and `Projects`. Includes `.b4xlib` packages such as B4XPages, XUI Views, OkHttpUtils2, and the `b4xlib2XML` B4J converter. Authorship of the libraries stays with Anywhere Software / the original library authors.
 
 **Source last updated:** 2021-10-01  
 **Language:** B4X / B4A / B4J / B4i / B4R  
