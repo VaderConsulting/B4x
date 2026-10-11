@@ -33,4 +33,4 @@ Working copy of B4X additional libraries from Dave Robinson's Historical Dev arc
 
 ## License
 
-Original B4X / Anywhere Software and community library licences apply. Dave's wrapper files in this repo, if any, are MIT © 2026 VaderConsulting. See `THIRD_PARTY_NOTICES.md`.
+Original B4X / Anywhere Software and community library licences apply. Dave's wrapper files in this repo, if any, are MIT © 2026 Vader Consulting. See `THIRD_PARTY_NOTICES.md`.
